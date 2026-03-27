@@ -133,6 +133,7 @@ label{font-size:14px;font-weight:600;color:#555;display:block;margin-bottom:8px}
 <div class="cfg-item"><label>목표 결제가 비율</label><input type="number" id="cfgTarget" value="130" step="5"><div class="hint">% (국내가 대비, 기본 130%)</div></div>
 <div class="cfg-item"><label>도매가 조정율 (자동산출)</label><input type="number" id="cfgCostAdj" value="100" step="5"><div class="hint">% (목표비율 기반 자동계산, 수정가능)</div></div>
 <div class="cfg-item"><label>KRW→USD 환율</label><input type="number" id="cfgKRWUSD" value="1250" step="10"><div class="hint">1 USD = ? KRW (기본 1,250)</div></div>
+<div class="cfg-item"><label>셀러 바우처</label><input type="number" id="cfgVoucher" value="5" step="0.5" min="0"><div class="hint">SGD (기본 5, 0 가능)</div></div>
 <div class="cfg-item"><label>변동비율</label><input type="number" id="cfgVar" value="20" step="1"><div class="hint">% (정산액 기준, 기본 20%)</div></div>
 </div>
 </div>
@@ -196,7 +197,8 @@ function getCfg(){
     costAdj: parseFloat(document.getElementById('cfgCostAdj').value)/100,
     krwusd: parseFloat(document.getElementById('cfgKRWUSD').value),
     varRate: parseFloat(document.getElementById('cfgVar').value)/100,
-    target: parseFloat(document.getElementById('cfgTarget').value)/100
+    target: parseFloat(document.getElementById('cfgTarget').value)/100,
+    voucher: parseFloat(document.getElementById('cfgVoucher').value)||0
   };
 }
 
@@ -275,8 +277,8 @@ function calcPricing(p){
   var buyerPays = discounted_exTax * (1 + c.gst);
   buyerPays = Math.ceil(buyerPays * 100) / 100;
 
-  // 셀러 바우처 (고정 SGD 5)
-  var voucher = 5.00;
+  // 셀러 바우처 (설정값)
+  var voucher = c.voucher;
 
   // 순매출 (세포함/세전)
   var netRevenue_incTax = buyerPays - voucher;
@@ -302,8 +304,16 @@ function calcPricing(p){
   // 변동비 (정산액 기준)
   var variableCostSGD = settlementSGD * c.varRate;
 
-  // 최종 마진 = 정산액 - 원가 - 변동비
+  // 최종 마진 (공헌이익) = 정산액 - 원가 - 변동비
   var finalMarginSGD = settlementSGD - productCostSGD - variableCostSGD;
+
+  // 순매출(세전) = 수출신고 기준 해외매출
+  var netSales_exTax = netRevenue_exTax;
+  // 공헌이익률 = 공헌이익 / 순매출(세전)
+  var contributionRate = netSales_exTax ? (finalMarginSGD / netSales_exTax * 100) : 0;
+  // ROI = 공헌이익 / 투입원가(제품원가+배송비)
+  var investedCostSGD = productCostSGD + sellerShipping;
+  var roi = investedCostSGD ? (finalMarginSGD / investedCostSGD * 100) : 0;
 
   // 국내판매가 기준 비율
   var domesticKRW = p.newPrice || 0;
@@ -343,7 +353,10 @@ function calcPricing(p){
     productCost: toAll(productCostSGD),
     productCostKRW_orig: productCostKRW,
     variableCost: toAll(variableCostSGD),
-    finalMargin: toAll(finalMarginSGD)
+    finalMargin: toAll(finalMarginSGD),
+    netSales_exTax: toAll(netSales_exTax),
+    contributionRate: contributionRate,
+    roi: roi
   };
 }
 
@@ -482,7 +495,11 @@ function pricingHTML(pr,p){
   h+=row('(-) 제품 원가',pr.productCost,'');
   h+=row('(-) 변동비 ('+Math.round(c.varRate*100)+'%)',pr.variableCost,'');
   var mc=pr.finalMargin.sgd>=0?'gn-row':'rd-row';
-  h+='<tr class="sep '+mc+'"><td>최종 마진</td><td>'+fk(pr.finalMargin.krw)+'</td><td>'+fu(pr.finalMargin.usd)+'</td><td>'+fs(pr.finalMargin.sgd)+'</td></tr>';
+  h+='<tr class="sep '+mc+'"><td>공헌이익 (최종마진)</td><td>'+fk(pr.finalMargin.krw)+'</td><td>'+fu(pr.finalMargin.usd)+'</td><td>'+fs(pr.finalMargin.sgd)+'</td></tr>';
+  var rc=pr.contributionRate>=0?'gn-row':'rd-row';
+  h+='<tr class="'+rc+'"><td>공헌이익률 (순매출 세전 기준)</td><td colspan="3" style="text-align:center;font-weight:700">'+pr.contributionRate.toFixed(1)+'%</td></tr>';
+  var roic=pr.roi>=0?'gn-row':'rd-row';
+  h+='<tr class="'+roic+'"><td>ROI (투입원가 대비)</td><td colspan="3" style="text-align:center;font-weight:700">'+pr.roi.toFixed(1)+'%</td></tr>';
   h+='</table>';
   return h;
 }
@@ -651,8 +668,14 @@ function calcRealMargin(){
   // 변동비
   var variableCostSGD=settlementSGD*c.varRate;
 
-  // 최종 마진
+  // 최종 마진 (공헌이익)
   var finalMarginSGD=settlementSGD-productCostSGD-variableCostSGD;
+
+  // 순매출(세전) = 수출신고 기준 해외매출
+  var netSales_exTax=netRevenue_exTax;
+  var contributionRate=netSales_exTax?(finalMarginSGD/netSales_exTax*100):0;
+  var investedCostSGD=productCostSGD+sf;
+  var roi2=investedCostSGD?(finalMarginSGD/investedCostSGD*100):0;
 
   // 국내가 대비 비율
   var domesticKRW=p.newPrice||0;
@@ -689,7 +712,11 @@ function calcRealMargin(){
   h+='<tr class="sep bl-row"><td>정산액</td><td>'+fk(settlementSGD/c.fx*c.krwusd)+'</td><td>'+fu(settlementSGD/c.fx)+'</td><td>'+fs(settlementSGD)+'</td></tr>';
   h+=row('(-) 제품 원가',toAll(productCostSGD),'');
   h+=row('(-) 변동비 ('+Math.round(c.varRate*100)+'%)',toAll(variableCostSGD),'');
-  h+='<tr class="sep '+mc+'"><td>최종 마진</td><td>'+fk(finalMarginSGD/c.fx*c.krwusd)+'</td><td>'+fu(finalMarginSGD/c.fx)+'</td><td>'+fs(finalMarginSGD)+'</td></tr>';
+  h+='<tr class="sep '+mc+'"><td>공헌이익 (최종마진)</td><td>'+fk(finalMarginSGD/c.fx*c.krwusd)+'</td><td>'+fu(finalMarginSGD/c.fx)+'</td><td>'+fs(finalMarginSGD)+'</td></tr>';
+  var rc2=contributionRate>=0?'gn-row':'rd-row';
+  h+='<tr class="'+rc2+'"><td>공헌이익률 (순매출 세전 기준)</td><td colspan="3" style="text-align:center;font-weight:700">'+contributionRate.toFixed(1)+'%</td></tr>';
+  var roic2=roi2>=0?'gn-row':'rd-row';
+  h+='<tr class="'+roic2+'"><td>ROI (투입원가 대비)</td><td colspan="3" style="text-align:center;font-weight:700">'+roi2.toFixed(1)+'%</td></tr>';
   h+='</table></div>';
 
   document.getElementById('realResult').innerHTML=h;
