@@ -215,14 +215,13 @@ function calcCostAdj(p){
   var discounted_exTax = targetBuyerPays / (1 + c.gst);
   // discounted_exTax = shopSKU_exTax * (1 - disc)
   var shopSKU_exTax = discounted_exTax / (1 - c.disc);
-  // shopSKU_exTax = globalSKU_USD * fx / adj
-  var globalSKU_USD = shopSKU_exTax * c.adj / c.fx;
-  // globalSKU_USD = (adjustedCost + shippingUSD) * (1 + payo)
-  var prePayoneer = globalSKU_USD / (1 + c.payo);
-  var shippingUSD = sf / c.fx;
-  var adjustedCost = prePayoneer - shippingUSD;
-  if(adjustedCost<=0)return null;
-  return adjustedCost / usdCost;
+  // shopSKU_exTax = (globalSKU × adj × fx + shipping) / (1 - comm - pg - svc)
+  var feeRate = 1 - c.comm - c.pg - c.svc;
+  var costSGD = shopSKU_exTax * feeRate;
+  // costSGD = globalSKU × adj × fx + shipping
+  var globalSKU_USD = (costSGD - sf) / (c.adj * c.fx);
+  if(globalSKU_USD<=0)return null;
+  return globalSKU_USD / usdCost;
 }
 
 // 제품 추가 시 또는 목표비율 변경 시 도매가 조정율 자동 업데이트
@@ -256,13 +255,13 @@ function calcPricing(p){
   // 도매가 조정 적용
   var adjustedCost = usdCost * c.costAdj;
 
-  // Global SKU (USD) = 조정 도매가 + 배송비(USD) + 페이오니아
-  var shippingUSD = sellerShipping / c.fx;
-  var globalSKU_USD = adjustedCost + shippingUSD;
-  globalSKU_USD += globalSKU_USD * c.payo;
+  // Global SKU (USD) = 조정 도매가 (배송비/페이오니아 미포함)
+  var globalSKU_USD = adjustedCost;
 
-  // Shop SKU (세전, SGD) = Global SKU × fx ÷ 조정율
-  var shopSKU_exTax = globalSKU_USD * c.fx / c.adj;
+  // Shop SKU 세전 = (Global SKU × adj × fx + 배송비SGD) ÷ (1 - comm - pg - svc)
+  var costSGD = globalSKU_USD * c.adj * c.fx + sellerShipping;
+  var feeRate = 1 - c.comm - c.pg - c.svc;
+  var shopSKU_exTax = costSGD / feeRate;
   shopSKU_exTax = Math.ceil(shopSKU_exTax * 100) / 100;
 
   // Shop SKU (세포함, 고객 노출) = 세전 × (1 + GST)
@@ -469,8 +468,8 @@ function pricingHTML(pr,p){
   h+=row('USD 판매가 (÷'+c.krwusd+')',pr.usdRetailPrice,'');
   h+=row('USD 도매가 (×'+Math.round(c.wholesale*100)+'%)',pr.wholesaleCost,'hl-row');
   if(pr.costAdjPct!==100){h+=row('조정 도매가 (×'+pr.costAdjPct+'%)',pr.adjustedCost,'hl-row');}
-  h+=row('Global SKU',pr.globalSKU,'');
-  h+=row('Shop SKU 세전 (÷'+Math.round(c.adj*100)+'%)',pr.shopSKU_exTax,'');
+  h+=row('Global SKU (조정도매가)',pr.globalSKU,'');
+  h+=row('Shop SKU 세전 (수수료역산)',pr.shopSKU_exTax,'');
   h+=row('Shop SKU 세포함 (노출가)',pr.shopSKU_incTax,'bl-row',pr.shopSKU_pct);
   h+=row('할인가 세전 (-'+Math.round(c.disc*100)+'%)',pr.discounted_exTax,'');
   h+=row('결제가 세포함 (Subtotal)',pr.buyerPays,'bl-row',pr.buyerPays_pct);
