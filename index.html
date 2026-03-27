@@ -261,9 +261,17 @@ function calcPricing(p){
   var globalSKU_USD = adjustedCost + shippingUSD;
   globalSKU_USD += globalSKU_USD * c.payo;
 
-  // Shop SKU (세전, SGD) = Global SKU × fx ÷ 조정율
+  // Shop SKU (세전, SGD) = Global SKU × fx ÷ 조정율 (정산기준)
   var shopSKU_exTax = globalSKU_USD * c.fx / c.adj;
   shopSKU_exTax = Math.ceil(shopSKU_exTax * 100) / 100;
+
+  // 시트 기준 Shop SKU 세전 = (조정도매가 × adj × fx + 배송비SGD) ÷ (1 - comm - pg - svc)
+  var sheetCostSGD = adjustedCost * c.adj * c.fx + sellerShipping;
+  var sheetFeeRate = 1 - c.comm - c.pg - c.svc;
+  var sheetSKU_exTax = Math.ceil(sheetCostSGD / sheetFeeRate * 100) / 100;
+  var sheetSKU_incTax = Math.ceil(sheetSKU_exTax * (1 + c.gst) * 100) / 100;
+  var sheetDisc_exTax = Math.ceil(sheetSKU_exTax * (1 - c.disc) * 100) / 100;
+  var sheetBuyerPays = Math.ceil(sheetDisc_exTax * (1 + c.gst) * 100) / 100;
 
   // Shop SKU (세포함, 고객 노출) = 세전 × (1 + GST)
   var shopSKU_incTax = shopSKU_exTax * (1 + c.gst);
@@ -329,6 +337,9 @@ function calcPricing(p){
     shopSKU_exTax: toAll(shopSKU_exTax),
     shopSKU_incTax: toAll(shopSKU_incTax),
     shopSKU_pct: shopSKU_pct,
+    sheetSKU_exTax: toAll(sheetSKU_exTax),
+    sheetSKU_incTax: toAll(sheetSKU_incTax),
+    sheetBuyerPays: toAll(sheetBuyerPays),
     discounted_exTax: toAll(discounted_exTax),
     buyerPays: toAll(buyerPays),
     buyerPays_pct: buyerPays_pct,
@@ -470,6 +481,11 @@ function pricingHTML(pr,p){
   h+=row('USD 도매가 (×'+Math.round(c.wholesale*100)+'%)',pr.wholesaleCost,'hl-row');
   if(pr.costAdjPct!==100){h+=row('조정 도매가 (×'+pr.costAdjPct+'%)',pr.adjustedCost,'hl-row');}
   h+=row('Global SKU',pr.globalSKU,'');
+  h+='<tr class="sep" style="background:#fff8e1"><td colspan="4" style="font-weight:700;color:#e65100">📋 가격 세팅 기준 (시트 수식)</td></tr>';
+  h+=row('Shop SKU 세전 (시트)',pr.sheetSKU_exTax,'');
+  h+=row('Shop SKU 세포함 (시트 노출가)',pr.sheetSKU_incTax,'bl-row');
+  h+=row('결제가 세포함 (시트 할인후)',pr.sheetBuyerPays,'bl-row');
+  h+='<tr class="sep" style="background:#e8f5e9"><td colspan="4" style="font-weight:700;color:#2e7d32">📊 정산 예측 기준</td></tr>';
   h+=row('Shop SKU 세전 (÷'+Math.round(c.adj*100)+'%)',pr.shopSKU_exTax,'');
   h+=row('Shop SKU 세포함 (노출가)',pr.shopSKU_incTax,'bl-row',pr.shopSKU_pct);
   h+=row('할인가 세전 (-'+Math.round(c.disc*100)+'%)',pr.discounted_exTax,'');
