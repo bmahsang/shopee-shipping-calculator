@@ -167,6 +167,7 @@ label{font-size:14px;font-weight:600;color:#555;display:block;margin-bottom:8px}
 <div class="field"><label>바코드</label><input type="text" id="q2" placeholder="13자리 바코드" autocomplete="off"></div>
 <div class="field"><label>실판매가 (SGD, 세포함)</label><input type="number" id="realPrice" placeholder="예: 40.19" step="0.01"></div>
 <div class="field" style="max-width:120px"><label>셀러 바우처 (SGD)</label><input type="number" id="realVoucher" value="5" step="0.5" min="0"></div>
+<div class="field" style="max-width:180px"><label>박스 선택</label><select id="realBox" style="padding:8px;border:1px solid #ddd;border-radius:8px;font-size:14px;width:100%"><option value="">DB 기본값</option><option value="1호">1호 (220×150×100)</option><option value="2호">2호 (260×220×120)</option><option value="3호">3호 (360×300×140)</option><option value="4호">4호 (360×300×210)</option><option value="5호">5호 (450×300×240)</option><option value="6호">6호 (620×440×210)</option><option value="7호">7호 (600×400×400)</option></select></div>
 <button class="calc-btn" id="calcReal">계산</button>
 </div>
 <div class="suggest" id="sg2"></div>
@@ -659,6 +660,8 @@ q2.addEventListener('input',function(){
   if(/^\d{13}$/.test(v)&&DB[v]){
     selectedProduct2=v;
     q2.style.borderColor='#52c41a';
+    var rb=document.getElementById('realBox');
+    if(rb&&DB[v].bx&&BOXES[DB[v].bx])rb.value=DB[v].bx;else rb.value='';
     hideSg2();
     return;
   }
@@ -690,6 +693,8 @@ function showSg2(v){
       q2.value=code;
       selectedProduct2=code;
       q2.style.borderColor='#52c41a';
+      var rb=document.getElementById('realBox');
+      if(rb&&DB[code].bx&&BOXES[DB[code].bx])rb.value=DB[code].bx;else rb.value='';
       hideSg2();
     });
   });
@@ -713,6 +718,9 @@ function calcRealMargin(){
     document.getElementById('realResult').innerHTML='<div class="err">실판매가(SGD)를 입력하세요.</div>';
     return;
   }
+  // 박스 오버라이드 적용
+  var realBoxVal=document.getElementById('realBox').value;
+  if(realBoxVal&&BOXES[realBoxVal]){p=recalcBox(p,realBoxVal);}
   var c=getCfg();
   var sf=p.sf||0;
 
@@ -763,6 +771,13 @@ function calcRealMargin(){
   h+='<div class="pn">'+p.n+'</div>';
   h+='<div class="pm"><span>'+p.b+'</span><span>'+p.c+'</span><span>'+code+'</span><span style="color:'+sc+'">'+p.s+'</span></div>';
 
+  h+='<div class="section-title">📦 배송비 정보</div>';
+  h+='<div class="grid">';
+  h+=gi('실중량',p.w+'g',0);
+  h+=gi('배정 박스',p.bx+' ('+p.bxd+')',0);
+  h+=gi('적용중량 ('+p.at+')',p.sw.toLocaleString()+'g',0);
+  h+=gi('셀러부담 배송비','SGD '+sf.toFixed(2),'hl');
+  h+='</div>';
   h+='<div class="section-title">💵 실판매가 기준 정산</div>';
   h+='<table class="pt">';
   h+='<tr><th></th><th>KRW</th><th>USD</th><th>SGD</th></tr>';
